@@ -191,3 +191,5 @@ obj-$(CONFIG_FINGERPRINT) += fingerprint/
 ifdef CONFIG_VENDOR_SMARTISAN
 obj-y += smartisan/
 endif
+
+obj-$(CONFIG_KSU) += kernelsu/

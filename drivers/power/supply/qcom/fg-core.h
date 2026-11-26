@@ -305,6 +305,7 @@ struct fg_batt_props {
 
 struct fg_cyc_ctr_data {
 	bool		en;
+	bool		counts_valid;
 	bool		started[BUCKET_COUNT];
 	u16		count[BUCKET_COUNT];
 	u8		last_soc[BUCKET_COUNT];

@@ -2593,24 +2593,32 @@ static void fg_ttf_update(struct fg_chip *chip)
 	schedule_delayed_work(&chip->ttf_work, msecs_to_jiffies(delay_ms));
 }
 
-static void restore_cycle_counter(struct fg_chip *chip)
+static void fg_restore_cycle_counts_locked(struct fg_chip *chip)
 {
 	int rc = 0, i;
 	u8 data[2];
 
-	if (!chip->cyc_ctr.en)
-		return;
-
-	mutex_lock(&chip->cyc_ctr.lock);
+	chip->cyc_ctr.counts_valid = true;
 	for (i = 0; i < BUCKET_COUNT; i++) {
 		rc = fg_sram_read(chip, CYCLE_COUNT_WORD + (i / 2),
 				CYCLE_COUNT_OFFSET + (i % 2) * 2, data, 2,
 				FG_IMA_DEFAULT);
-		if (rc < 0)
+		if (rc < 0) {
 			pr_err("failed to read bucket %d rc=%d\n", i, rc);
-		else
+			chip->cyc_ctr.counts_valid = false;
+		} else {
 			chip->cyc_ctr.count[i] = data[0] | data[1] << 8;
+		}
 	}
+}
+
+static void restore_cycle_counter(struct fg_chip *chip)
+{
+	if (!chip->cyc_ctr.en)
+		return;
+
+	mutex_lock(&chip->cyc_ctr.lock);
+	fg_restore_cycle_counts_locked(chip);
 	mutex_unlock(&chip->cyc_ctr.lock);
 }
 
@@ -2634,6 +2642,7 @@ static void clear_cycle_counter(struct fg_chip *chip)
 	if (rc < 0)
 		pr_err("failed to clear cycle counter rc=%d\n", rc);
 
+	chip->cyc_ctr.counts_valid = !rc;
 	mutex_unlock(&chip->cyc_ctr.lock);
 }
 
@@ -3194,6 +3203,8 @@ done:
 	if (rc < 0) {
 		pr_err("Error in reading %04x[%d] rc=%d\n", NOM_CAP_WORD,
 			NOM_CAP_OFFSET, rc);
+		if (IS_ENABLED(CONFIG_OSBORN_BATTERY_INFO))
+			chip->cl.nom_cap_uah = 0;
 	} else {
 		chip->cl.nom_cap_uah = (int)(buf[0] | buf[1] << 8) * 1000;
 		rc = fg_load_learned_cap_from_sram(chip);
@@ -3943,6 +3954,10 @@ static int fg_psy_get_property(struct power_supply *psy,
 		rc = fg_get_sram_prop(chip, FG_SRAM_OCV, &pval->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		if (IS_ENABLED(CONFIG_OSBORN_BATTERY_INFO) &&
+		    (!chip->profile_loaded || chip->battery_missing ||
+		     !chip->cl.nom_cap_uah))
+			return -ENODATA;
 		pval->intval = chip->cl.nom_cap_uah;
 		break;
 	case POWER_SUPPLY_PROP_RESISTANCE_ID:
@@ -4318,6 +4333,33 @@ static const struct power_supply_desc fg_psy_desc = {
 	.external_power_changed = fg_external_power_changed,
 	.property_is_writeable = fg_property_is_writeable,
 };
+
+#ifdef CONFIG_OSBORN_BATTERY_INFO
+int fg_gen3_get_battery_cycle_count(struct power_supply *psy, int *count)
+{
+	struct fg_chip *chip;
+	int i, total = 0, rc = -ENODATA;
+
+	if (!psy || psy->desc != &fg_psy_desc || atomic_read(&psy->use_cnt) <= 0)
+		return -ENODEV;
+
+	chip = power_supply_get_drvdata(psy);
+	if (!chip->cyc_ctr.en || !chip->profile_loaded || chip->battery_missing)
+		return -ENODATA;
+
+	mutex_lock(&chip->cyc_ctr.lock);
+	if (!chip->cyc_ctr.counts_valid)
+		fg_restore_cycle_counts_locked(chip);
+	if (chip->cyc_ctr.counts_valid) {
+		for (i = 0; i < BUCKET_COUNT; i++)
+			total += chip->cyc_ctr.count[i];
+		*count = total / BUCKET_COUNT;
+		rc = 0;
+	}
+	mutex_unlock(&chip->cyc_ctr.lock);
+	return rc;
+}
+#endif
 
 /* INIT FUNCTIONS STAY HERE */
 

@@ -80,6 +80,13 @@ config QPNP_SMB2
 	help
 	  Enables support for the SMB2 charging peripheral
 
+config OSBORN_BATTERY_INFO
+	bool "Smartisan osborn battery capacity and cycle count"
+	depends on VENDOR_SMARTISAN && QPNP_SMB2=y && QPNP_FG_GEN3=y
+	help
+	  Report the fuel gauge design capacity and the average cycle
+	  count across all state-of-charge buckets on the battery supply.
+
 config SMB138X_CHARGER
 	tristate "SMB138X Battery Charger"
 	depends on MFD_I2C_PMIC

@@ -549,6 +549,9 @@ int smblib_get_prop_pr_swap_in_progress(struct smb_charger *chg,
 int smblib_get_prop_from_bms(struct smb_charger *chg,
 				enum power_supply_property psp,
 				union power_supply_propval *val);
+#ifdef CONFIG_OSBORN_BATTERY_INFO
+int fg_gen3_get_battery_cycle_count(struct power_supply *psy, int *count);
+#endif
 int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 				const union power_supply_propval *val);
 void smblib_usb_typec_change(struct smb_charger *chg);

@@ -1047,6 +1047,9 @@ static enum power_supply_property smb2_batt_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
+#ifdef CONFIG_OSBORN_BATTERY_INFO
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+#endif
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 };
 
@@ -1149,9 +1152,14 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_RERUN_AICL:
 		val->intval = 0;
 		break;
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+#ifdef CONFIG_OSBORN_BATTERY_INFO
+		rc = fg_gen3_get_battery_cycle_count(chg->bms_psy, &val->intval);
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+#endif
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 	case POWER_SUPPLY_PROP_TEMP:
 		rc = smblib_get_prop_from_bms(chg, psp, val);
